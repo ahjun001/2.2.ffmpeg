@@ -7,13 +7,7 @@ set -euo pipefail
 
 $DBG $'\n'"${BASH_SOURCE[0]#/home/perubu/Documents/Github/}"
 
-# Exit if APP is already installed
-APP=podman
-# if command -v "$APP" >/dev/null; then
-#     $DBG $'\t'"$APP" is already installed
-#     [[ "$0" == "${BASH_SOURCE[0]}" ]] && exit 0 || return 0
-# fi
-
+APP=docker
 # forcing to install if launched from CLI
 # when sourced, exiting if package is already installed
 if [[ "$0" == "${BASH_SOURCE[0]}" ]] || ! command -v "$APP"; then
@@ -23,40 +17,85 @@ if [[ "$0" == "${BASH_SOURCE[0]}" ]] || ! command -v "$APP"; then
         $DBG -e "\n$APP not implemented in $ID\n"
         ;;
     linuxmint | ubuntu)
-        ENTRY=1
+        ENTRY=2
         case $ENTRY in
         1)
             # Install Podman on your system
-            sudo apt install podman
+            sudo apt install docker
             ;&
         2)
+            # link source file here
+            # [[ -L ./ffmpeg ]] || ln -s ~/.local/share/src/ffmpeg ./ffmpeg
+            rsync -a ~/.local/share/src/ffmpeg/ ./ffmpeg
+            
             # Create a Podmanfile with build instructions
             cat <<. >Podmanfile
-FROM ubuntu:22.04
+# Stage 1: build FFmpeg
+FROM ubuntu:22.04 as build
 
 RUN apt-get update && \
     apt-get install -y \
-       git \
-       build-essential \
-       cmake \
-       libtool \
-       pkg-config
+    autoconf \
+    automake \
+    build-essential \
+    git-core \
+    libass-dev \
+    libtool \
+    pkg-config \
+    libx264-dev \
+    libfreetype6-dev \
+    libgnutls28-dev \
+    libmp3lame-dev \
+    libsdl2-dev \
+    libva-dev \
+    libvdpau-dev \
+    libvorbis-dev \
+    libxcb1-dev \
+    libxcb-shm0-dev \
+    libxcb-xfixes0-dev \
+    meson \
+    nasm \
+    ninja-build \
+    pkg-config \
+    texinfo \
+    wget \
+    yasm \
+    zlib1g-dev
 
-RUN git clone https://git.ffmpeg.org/ffmpeg.git
+COPY ffmpeg /
 
-WORKDIR /ffmpeg
-RUN ./configure --disable-everything --enable-gpl --enable-libass && \
-    make -j$(nproc) && \
-    make install
+RUN ./configure \
+--disable-everything \
+--enable-gpl \
+--enable-gnutls \
+--enable-libx264 \
+--enable-libvpx \
+--enable-libfontconfig \
+--enable-libfreetype \
+--enable-filter=drawtext \
+--enable-libass
+
+RUN make distclean
+RUN make $(nproc)
+RUN sudo make install 
+
+# Stage 2: copy built FFmpeg into clean image
+FROM ubuntu:22.04
+COPY --from=build /ffmpeg /ffmpeg
+
+# Use compiled FFmpeg
+RUN ./ffmpeg -version
+
 .
             ;&
         3)
+            echo in step 3
             # Build the Podman image
-            podman build -f Podmanfile -t ffmpeg-build .
+            docker build -f Podmanfile -t ffmpeg-build .
             ;&
         4)
             # Run the image to start a container
-            podman run -it ffmpeg-build bash
+            docker run -it ffmpeg-build bash
             printf "%s\n" 'The package binary will be available inside at /usr/local/bin/ffmpeg'
             ;;
         *) echo "$APP" 'install done' ;;
