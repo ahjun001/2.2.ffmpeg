@@ -1,0 +1,8 @@
+FROM ubuntu:22.04
+
+RUN apt-get update &&     apt-get install -y        git        build-essential        cmake        libtool        pkg-config
+
+RUN git clone https://git.ffmpeg.org/ffmpeg.git
+
+WORKDIR /ffmpeg
+RUN ./configure --disable-everything --enable-gpl --enable-libass &&     make -j12 &&     make install
